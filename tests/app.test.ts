@@ -60,7 +60,10 @@ const scripted = (results: (number | Error)[]): Fetcher => {
   };
 };
 // Monitors are created "now" through the API, so test times are offsets from now (all within ~20 minutes).
-const BASE = Date.now() + 1000;
+// BASE is recomputed per-test (see beforeEach below) rather than once at module load: a slow
+// cold start (native module loading, transform) can otherwise push monitor creation past a
+// fixed BASE taken at import time, making every monitor look "not due yet" and failing checks.
+let BASE = Date.now() + 1000;
 const at = (mins: number) => new Date(BASE + mins * 60_000);
 
 describe('smoke + auth', () => {
@@ -159,6 +162,7 @@ describe('checking, incidents, public page', () => {
         url: 'https://secret-internal.example.com/private-path',
       })
     ).body.id;
+    BASE = Date.now() + 1000;
   });
   const tick = (mins: number, f: Fetcher) => checkerTick(ctx.db, at(mins), { fetcher: f });
   const pub = async () =>
@@ -303,6 +307,7 @@ describe('real HTTP checking (local server, allowPrivate)', () => {
     const { key } = await mint(ctx);
     const p = await page(ctx, key);
     expect((await monitor(ctx, key, p.body.id, { url })).r.status).toBe(201);
+    BASE = Date.now() + 1000;
     const run = (m: number) => checkerTick(ctx.db, at(m), { allowPrivate: true });
     code = 200;
     await run(0);
